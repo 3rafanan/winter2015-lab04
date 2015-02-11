@@ -14,28 +14,88 @@ class Orders extends MY_Model {
 
     // add an item to an order
     function add_item($num, $code) {
-        
+
+
+        $CI = &get_instance();
+        $CI->load->model('orderitems');
+
+        if($CI->orderitems->exists($num, $code))
+        {
+            $record = $CI->orderitems->get($num, $code);
+            $record->quantity++;
+            $CI->orderitems->update($record);
+        }
+        else
+        {
+            $record = $CI->orderitems->create();
+            $record->order = $num;
+            $record->item = $code;
+            $record->quantity = 1;
+            $CI->orderitems->add($record);
+        }
     }
 
     // calculate the total for an order
     function total($num) {
-        return 0.0;
+
+        $total = 0.0;
+
+        $items = $this->orderitems->some('order', $num);
+
+        foreach($items as $item)
+        {
+            $menuitem = $this->menu->get($item->item);
+            $total += $item->quantity * $menuitem->price;
+        }
+
+        $order = $this->get($num);
+        $order->total = $total;
+
+        $this->update($order);
+
+        return $total;
     }
 
     // retrieve the details for an order
     function details($num) {
-        
+        $itemDetails = $this->orderitems->some('order', $num);
+
+        foreach($itemDetails as &$entry)
+        {
+            $item = $this->menu->get($entry->item);
+            $entry->picture = $item->picture;
+            $entry->name = $item->name;
+        }
+
+        return $itemDetails;
     }
 
     // cancel an order
     function flush($num) {
-        
+        $order = $this->get($num);
+        $order->status = 'x';
+        $this->update($order);
+
+        $this->orderitems->delete_some($num);
     }
 
     // validate an order
     // it must have at least one item from each category
     function validate($num) {
-        return false;
+
+        $CI = &get_instance();
+        $items = $CI->orderitems->group($num);
+        $gotem = array();
+
+        if(count($items) > 0)
+        {
+            foreach($items as $item)
+            {
+                $menu = $CI->menu-get($item->item);
+                $gotem[$menu->category] = 1;
+            }
+        }
+        return isset($gotem['m']) && isset($gotem['d']) && isset($gotem['s']);
     }
 
 }
